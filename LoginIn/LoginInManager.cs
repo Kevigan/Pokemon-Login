@@ -20,11 +20,27 @@ public class LoginInManager : MonoBehaviour
     public GameObject LoginPanel;
     public GameObject MenuPanel;
 
-    public TMP_Text accountInfo;
+    public TMP_Text accountName;
+    public TMP_Text accountId;
+    public TMP_Text playerExperience;
+    public TMP_Text playerKills;
+    public TMP_Text playerCoins;
 
     public bool showPw = false;
+    string logedUser = "";
+    public int account_ID = -1;
+    int playerExp = 0;
+    int killed_Enemies = 0;
+    int collected_Coins = 0;
+
+    public AchievementManager achievementManager;
 
     private string baseUrl = "http://localhost:3001";
+
+    private void Start()
+    {
+        achievementManager.OnAchievementChecked += HandleLoginAchievement;
+    }
 
     public void Login()
     {
@@ -38,6 +54,36 @@ public class LoginInManager : MonoBehaviour
         createPasswordInput.text = string.Empty;
         MenuPanel.SetActive(false);
         LoginPanel.SetActive(true);
+        logedUser = string.Empty;
+        account_ID = -1;
+    }
+
+    public void GetStats()
+    {
+        StartCoroutine(GetExperienceCoroutine());
+        StartCoroutine(GetKilled_EnemiesCoroutine());
+        StartCoroutine(GetCollected_CoinsCoroutine());
+    }
+
+    public void SetExp()
+    {
+        playerExp += 100;
+        playerExperience.text = "Player Experience: " + playerExp;
+        StartCoroutine(SetExperienceCoroutine());
+    }
+
+    public void SetKills()
+    {
+        killed_Enemies += 1;
+        playerKills.text = "Enemy killed: " + killed_Enemies;
+        StartCoroutine (SetEnemyKilledCoroutine());
+    }
+
+    public void SetCoins()
+    {
+        collected_Coins += 1;
+        playerCoins.text = "Collected coins: " + collected_Coins;
+        StartCoroutine(SetCoinsCollectedCoroutine());
     }
 
     public void CreatePlayer()
@@ -101,8 +147,13 @@ public class LoginInManager : MonoBehaviour
                     LoginPanel.SetActive(false);
                     CreatePlayerPanel.SetActive(false);
                     MenuPanel.SetActive(true);
-                    string logedUser = !justCreated ? usernameInput.text : name;
-                    accountInfo.text = "#" + logedUser;
+                    logedUser = !justCreated ? usernameInput.text : name;
+                    accountName.text = "#" + logedUser;
+                    account_ID = response.player_id;
+                    accountId.text = "ID: " + account_ID;
+                    GetStats();
+
+                    achievementManager.CheckAchievement("1");
                 }
                 else
                 {
@@ -111,13 +162,14 @@ public class LoginInManager : MonoBehaviour
             }
         }
     }
+
     IEnumerator CreatePlayerCoroutine()
     {
         WWWForm form = new WWWForm();
         form.AddField("playerName", createNameInput.text);
         form.AddField("password", createPasswordInput.text);
 
-        using(UnityWebRequest www = UnityWebRequest.Post(baseUrl + "/create", form))
+        using (UnityWebRequest www = UnityWebRequest.Post(baseUrl + "/create", form))
         {
             yield return www.SendWebRequest();
 
@@ -154,17 +206,218 @@ public class LoginInManager : MonoBehaviour
         StartCoroutine(LoginCoroutine(true, name, password));
     }
 
+    IEnumerator GetExperienceCoroutine()
+    {
+        using (UnityWebRequest www = UnityWebRequest.Get(baseUrl + "/get_stat/" + account_ID + "/experience"))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Error: " + www.error);
+                playerExperience.text = "Error fetching player experience.";
+            }
+            else
+            {
+                string responseJson = www.downloadHandler.text;
+                PlayerStatsResponse response = JsonUtility.FromJson<PlayerStatsResponse>(responseJson);
+                playerExp = response.experience;
+                playerExperience.text = "Player exp: " + playerExp;
+            }
+        }
+    }
+
+    IEnumerator GetKilled_EnemiesCoroutine()
+    {
+        using (UnityWebRequest www = UnityWebRequest.Get(baseUrl + "/get_stat/" + account_ID + "/killed_enemies"))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Error: " + www.error);
+                playerExperience.text = "Error fetching player experience.";
+            }
+            else
+            {
+                string responseJson = www.downloadHandler.text;
+                PlayerStatsResponse response = JsonUtility.FromJson<PlayerStatsResponse>(responseJson);
+                killed_Enemies = response.killed_enemies;
+                playerKills.text = "Enemy killed: " + killed_Enemies;
+            }
+        }
+    }
+
+    IEnumerator GetCollected_CoinsCoroutine()
+    {
+        using (UnityWebRequest www = UnityWebRequest.Get(baseUrl + "/get_stat/" + account_ID + "/collected_coins"))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Error: " + www.error);
+                playerExperience.text = "Error fetching player experience.";
+            }
+            else
+            {
+                string responseJson = www.downloadHandler.text;
+                PlayerStatsResponse response = JsonUtility.FromJson<PlayerStatsResponse>(responseJson);
+                collected_Coins = response.collected_coins;
+                playerCoins.text = "Collected coins: " + collected_Coins;
+            }
+        }
+    }
+
+    IEnumerator SetExperienceCoroutine()
+    {
+        WWWForm form = new WWWForm();
+        form.AddField("player_id", account_ID);
+        form.AddField("experience", playerExp);
+
+        using (UnityWebRequest www = UnityWebRequest.Post(baseUrl + "/set_stats/", form))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Error: " + www.error);
+                playerExperience.text = "Error updating player experience.";
+            }
+            else
+            {
+                string responseJson = www.downloadHandler.text;
+                SetStatsResponse response = JsonUtility.FromJson<SetStatsResponse>(responseJson);
+
+                if (response.success)
+                {
+                    messageText.text = "Player: " + response.player_stat.playername + "\n" +
+                                        "Experience: " + response.player_stat.experience;
+                }
+                else
+                {
+                    messageText.text = "Failed to update player experience.";
+                }
+            }
+        }
+    }
+
+    IEnumerator SetEnemyKilledCoroutine()
+    {
+        WWWForm form = new WWWForm();
+        form.AddField("player_id", account_ID);
+        form.AddField("killed_enemies", killed_Enemies);
+
+        using (UnityWebRequest www = UnityWebRequest.Post(baseUrl + "/set_stats/", form))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Error: " + www.error);
+                playerExperience.text = "Error updating player experience.";
+            }
+            else
+            {
+                string responseJson = www.downloadHandler.text;
+                SetStatsResponse response = JsonUtility.FromJson<SetStatsResponse>(responseJson);
+
+                if (response.success)
+                {
+                    //messageText.text = "Player: " + response.player_stat.playername + "\n" +
+                                        //"Experience: " + response.player_stat.experience;
+                }
+                else
+                {
+                    messageText.text = "Failed to update enemies killed.";
+                }
+            }
+        }
+    }
+
+    IEnumerator SetCoinsCollectedCoroutine()
+    {
+        WWWForm form = new WWWForm();
+        form.AddField("player_id", account_ID);
+        form.AddField("collected_coins", collected_Coins);
+
+        using (UnityWebRequest www = UnityWebRequest.Post(baseUrl + "/set_stats/", form))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError("Error: " + www.error);
+                playerExperience.text = "Error updating player coins.";
+            }
+            else
+            {
+                string responseJson = www.downloadHandler.text;
+                SetStatsResponse response = JsonUtility.FromJson<SetStatsResponse>(responseJson);
+
+                if (response.success)
+                {
+                    //messageText.text = "Player: " + response.player_stat.playername + "\n" +
+                    //"Experience: " + response.player_stat.experience;
+                }
+                else
+                {
+                    messageText.text = "Failed to update player coins.";
+                }
+            }
+        }
+    }
+
+    private void HandleLoginAchievement(bool achieved, int id)
+    {
+        if (id == 1)
+        {
+            if (achieved)
+                achievementManager.CheckAchievement("2");
+            else achievementManager.AddAchievement(1);
+        }
+        else if (id == 2)
+        {
+            if (achieved) { }
+            else achievementManager.AddAchievement(2);
+
+        }
+    }
+
     [System.Serializable]
     private class LoginResponse
     {
         public bool success;
         public string player_name;
         public string token;
+        public int player_id;
     }
 
     [System.Serializable]
     public class ErrorResponse
     {
         public string message;
+    }
+
+    [System.Serializable]
+    private class PlayerStatsResponse
+    {
+        public int player_id;
+        public int experience;
+        public int killed_enemies;
+        public int collected_coins;
+        public string playername;
+    }
+
+    [System.Serializable]
+    private class SetStatsResponse
+    {
+        public bool success;
+        public PlayerStatsResponse player_stat;
+    }
+
+    void OnDestroy()
+    {
+        achievementManager.OnAchievementChecked -= HandleLoginAchievement;
     }
 }

@@ -11,6 +11,7 @@ public class PokeBattleField : MonoBehaviour
     private bool isFirstPoke = true;
     public TextMeshProUGUI message;
     public PokeAPIController controller;
+    public AchievementManager achievementManager;
 
     void Start()
     {
@@ -20,7 +21,6 @@ public class PokeBattleField : MonoBehaviour
 
     private void Update()
     {
-
     }
 
     public void StartFight()
